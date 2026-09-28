@@ -167,6 +167,37 @@ def sub(m, dur, amp=0.35, attack=0.05, release=0.4):
     return np.tanh(1.3 * y * e) * amp
 
 
+def bass_harm(m, dur, amp=0.12, attack=0.01, release=0.2, cutoff=1500):
+    """Audible-on-a-phone bass: saturated saw an octave up, so the bassline survives small speakers
+    (they cannot reproduce the fundamental, but the ear reconstructs it from the harmonics)."""
+    f0 = mtof(m + 12)
+    n = ns(dur + release)
+    t = np.arange(n) / SR
+    s = saw(f0, n) + 0.5 * saw(f0 * 1.004, n, 0.37)
+    e = env_adsr(n, attack, 0.15, 0.75, release, hold=ns(dur))
+    y = lp(s, cutoff * (0.6 + 0.4 * np.exp(-t / 0.12)), 0.9) * e
+    return np.tanh(2.2 * y) / 2.2 * amp
+
+
+def crack(amp=0.5):
+    """The mid/high 'snap' of an impact, the part a phone speaker actually plays."""
+    n = ns(0.9); t = np.arange(n) / SR
+    y = hp(noise(n), 1200, 0.7) * np.exp(-t / 0.09)
+    y += bp(noise(n), 450, 1.2) * np.exp(-t / 0.18) * 0.8
+    y += sine(180 * (1 + 0.6 * np.exp(-t / 0.02)), n) * np.exp(-t / 0.12) * 0.6
+    return np.tanh(y * 1.5) * amp
+
+
+def whoosh(dur=0.7, amp=0.25, peak=0.62):
+    """Air moving past, peaking at `peak` * dur (placed so the peak lands on a cut)."""
+    n = ns(dur); t = np.arange(n) / SR
+    tp = peak * dur
+    env = np.where(t < tp, (t / tp) ** 2.2, np.exp(-(t - tp) / (0.18 * dur)))
+    fc = 500 * np.where(t < tp, 2 ** (3.2 * t / tp), 2 ** (3.2 - 1.5 * (t - tp) / (dur - tp + 1e-6)))
+    y = bp(noise(n), fc, 1.6) * env
+    return y * amp
+
+
 def harp(m, amp=0.25):
     f0 = mtof(m)
     n = ns(2.5)

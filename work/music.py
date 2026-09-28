@@ -6,6 +6,7 @@ import os, sys, json
 import numpy as np, soundfile as sf
 sys.path.insert(0, os.path.dirname(__file__))
 from synth import *
+from synth import bass_harm, crack, whoosh
 from edl import timeline
 
 S = os.environ['S']
@@ -76,11 +77,12 @@ put('pad', supersaw(52, 4.2, amp=0.07, cutoff=520, attack=2.5, release=1.2, detu
 put('fx', supersaw(81, 3.6, amp=0.020, cutoff=6000, attack=2.0, release=1.5, voices=5), 0.4)  # sky shimmer
 for k, t in enumerate((1.0, 2.0, 3.0)):
     put('drums', heartbeat(0.30 + 0.12 * k), t)
-put('fx', swell(2.4, 0.22), 4.0 - 2.4)
-put('fx', riser(3.0, 0.10, 200, 5000), 1.0)
+put('fx', swell(2.4, 0.40), 4.0 - 2.4)
+put('fx', riser(3.0, 0.22, 200, 6000), 1.0)
 # IMPACT at the overhead moment
 put('drums', boom(0.95), 4.0)
-put('fx', cymbal(3.5, 0.20), 4.0, p=0.1)
+put('drums', crack(0.55), 4.0)
+put('fx', cymbal(3.5, 0.36), 4.0, p=0.1)
 for m in (45, 52, 57):
     put('lead', brass(m, 1.2, amp=0.10, swell=0.03, peak=1500), 4.0, p=(m - 52) / 20)
 
@@ -89,39 +91,44 @@ for t0, t1, name in CH:
     b, notes = V[name]
     sec = section(t0)
     if sec in ('theme',):
-        amp, cut, att = 0.060, 1300, 0.9
+        amp, cut, att = 0.070, 2400, 0.9
     elif sec == 'open':
-        amp, cut, att = 0.080, 2300, 0.5
+        amp, cut, att = 0.095, 3600, 0.45
     elif sec == 'build':
-        amp, cut, att = 0.085, 2700, 0.4
+        amp, cut, att = 0.100, 4200, 0.35
     elif sec == 'climax':
-        amp, cut, att = 0.095, 3200, 0.3
+        amp, cut, att = 0.110, 5000, 0.25
     elif sec == 'chorus':
-        amp, cut, att = 0.105, 3600, 0.08
+        amp, cut, att = 0.125, 5800, 0.06
     else:
-        amp, cut, att = 0.070, 1800, 0.6
+        amp, cut, att = 0.080, 3000, 0.6
     dur = t1 - t0
     for i, m in enumerate(notes):
         put('pad', supersaw(m, dur, amp=amp, cutoff=cut, attack=att, release=0.9), t0, p=(i - 1.5) / 3)
     # bass
     if sec == 'theme':
         put('bass', sub(b + 12, dur, amp=0.16, attack=0.3, release=0.8), t0)
+        put('bass', bass_harm(b, dur, amp=0.05, attack=0.3, release=0.8, cutoff=900), t0)
     elif sec in ('open', 'build'):
         bar = t0
         while bar < t1 - 1e-6:
             put('bass', sub(b + 12, min(1.1, t1 - bar), amp=0.22, attack=0.02, release=0.25), bar)
+            put('bass', bass_harm(b, min(1.1, t1 - bar), amp=0.11, release=0.2), bar)
             if bar + 1.25 < t1:
                 put('bass', sub(b + 12, 0.6, amp=0.18, attack=0.02, release=0.2), bar + 1.25)
+                put('bass', bass_harm(b, 0.6, amp=0.09, release=0.15), bar + 1.25)
             bar += 2.0
     elif sec in ('climax', 'chorus'):
         k = t0
         while k < t1 - 1e-6:  # driving eighths, octave jumps
             m = b + 12 if int(round((k - t0) / 0.25)) % 4 != 2 else b + 24
             put('bass', sub(m, 0.22, amp=0.20, attack=0.005, release=0.06), k)
+            put('bass', bass_harm(m - 12, 0.2, amp=0.10, attack=0.004, release=0.05, cutoff=1900), k)
             k += 0.25
         put('bass', sub(b, t1 - t0, amp=0.16, attack=0.02, release=0.3), t0)
     elif sec == 'outro':
         put('bass', sub(b + 12, dur, amp=0.18, attack=0.2, release=1.5), t0)
+        put('bass', bass_harm(b, dur, amp=0.05, attack=0.2, release=1.5, cutoff=900), t0)
 
 # ------------------------------------------------------------------ PIANO: the "memory" theme under the announcer
 mel_theme = [(4.5, 76, 1.0), (5.5, 73, 0.5), (6.0, 71, 1.0), (7.0, 68, 0.5), (7.5, 69, 0.5), (8.0, 69, 1.0), (9.0, 73, 0.5), (9.5, 76, 0.5),
@@ -154,8 +161,9 @@ for t0, t1, name in CH:
 
 # ------------------------------------------------------------------ OPENING: the show starts
 put('drums', taiko(0.75), T_OPEN)
-put('fx', cymbal(3.0, 0.14), T_OPEN, p=-0.2)
-put('fx', swell(1.2, 0.16), T_OPEN - 1.2)
+put('drums', crack(0.35), T_OPEN)
+put('fx', cymbal(3.0, 0.26), T_OPEN, p=-0.2)
+put('fx', swell(1.2, 0.30), T_OPEN - 1.2)
 for m in (50, 57):
     put('lead', brass(m, 1.8, amp=0.08, swell=0.35, peak=1400), T_OPEN)
 # pulse: eighth-note plucks (sidechained later by kicks)
@@ -166,17 +174,18 @@ for t0, t1, name in CH:
     seq = [notes[0], notes[2], notes[1] + 12, notes[2]]
     t = t0; k = 0
     while t < t1 - 1e-6:
-        amp = 0.05 if t0 < T_OPEN else 0.085
-        put('pulse', pluck(seq[k % 4], 0.22, amp=amp, bright=2200 if t0 < T_OPEN else 3000), t, p=0.35 if k % 2 else -0.35)
+        amp = 0.06 if t0 < T_OPEN else 0.13
+        put('pulse', pluck(seq[k % 4], 0.22, amp=amp * (1.25 if k % 2 == 0 else 1.0), bright=2600 if t0 < T_OPEN else 4400), t, p=0.35 if k % 2 else -0.35)
         k += 1; t += 0.25
 # theme statement on strings+horns
 theme = [(0.0, 78, 1.0), (1.0, 76, 0.5), (1.5, 74, 0.5), (2.0, 73, 1.5), (3.5, 76, 0.5), (4.0, 71, 1.0), (5.0, 76, 1.0), (6.0, 73, 2.0)]
 for dt, m, d in theme:
-    put('lead', supersaw(m, d, amp=0.045, cutoff=3000, attack=0.12, release=0.5, voices=5, detune=8), T_OPEN + dt)
+    put('lead', supersaw(m, d, amp=0.075, cutoff=4800, attack=0.10, release=0.5, voices=5, detune=8), T_OPEN + dt)
+    put('fx', harp(m + 12, 0.07), T_OPEN + dt)
     put('lead', brass(m - 12, d, amp=0.05, swell=0.2, peak=1200), T_OPEN + dt)
 # the narrator counts the four-point roll -> harp answers
 for t, m in zip(COUNTS, (69, 73, 76)):
-    put('fx', harp(m, 0.20), t, p=0.3)
+    put('fx', harp(m, 0.30), t, p=0.3)
     put('fx', harp(m + 12, 0.08), t + 0.004, p=-0.3)
 # percussion for the opening
 bar = T_OPEN
@@ -215,12 +224,13 @@ k = 0
 while t < T_FORM - 1e-6:
     put('drums', tom(0.25 + 0.05 * k, 1.0 + 0.08 * (k % 3)), t, p=-0.4 + 0.1 * k)
     k += 1; t += 0.125
-put('fx', riser(2.0, 0.16), T_FORM - 2.0)
-put('fx', swell(1.5, 0.2), T_FORM - 1.5)
+put('fx', riser(2.0, 0.26), T_FORM - 2.0)
+put('fx', swell(1.5, 0.34), T_FORM - 1.5)
 
 # ------------------------------------------------------------------ CLIMAX: formations grow in the frame
 put('drums', boom(0.55), T_FORM)
-put('fx', cymbal(3.0, 0.2), T_FORM)
+put('drums', crack(0.45), T_FORM)
+put('fx', cymbal(3.0, 0.34), T_FORM)
 bar = T_FORM
 while bar < 41.0 - 1e-6:
     for off, what in ((0.0, 'k'), (0.75, 'k'), (1.0, 's'), (1.5, 'k')):
@@ -240,7 +250,8 @@ while t < 41.0 - 1e-6:
 chorus_mel = [(0.0, 81, 1.0), (1.0, 78, 0.5), (1.5, 76, 0.5), (2.0, 76, 1.5), (3.5, 73, 0.5), (4.0, 71, 1.0), (5.0, 76, 1.0),
               (6.0, 73, 1.0), (7.0, 76, 0.5), (7.5, 81, 0.5)]
 for dt, m, d in chorus_mel:
-    put('lead', supersaw(m - 12, d, amp=0.050, cutoff=3400, attack=0.10, release=0.5, voices=5, detune=9), T_FORM + dt)
+    put('lead', supersaw(m - 12, d, amp=0.080, cutoff=5200, attack=0.08, release=0.5, voices=5, detune=9), T_FORM + dt)
+    put('lead', supersaw(m, d, amp=0.035, cutoff=6000, attack=0.08, release=0.5, voices=5, detune=9), T_FORM + dt)
     put('lead', brass(m - 24, d, amp=0.055, swell=0.15, peak=1500), T_FORM + dt)
 for t0, t1, name in CH:
     if T_FORM <= t0 < 41.0:
@@ -255,16 +266,18 @@ put('drums', taiko(0.4), 41.0)
 put('bass', sub(33, T_PEAK - D, amp=0.07, attack=1.0, release=0.2), D)
 put('pad', tremolo_strings(76, T_PEAK - D - 1.2, amp=0.07, rate=13), D + 1.2)
 put('pad', tremolo_strings(81, T_PEAK - D - 1.8, amp=0.05, rate=13), D + 1.8)
-put('fx', swell(2.2, 0.26), T_PEAK - 2.2)
-put('fx', riser(2.5, 0.12, 300, 8000), T_PEAK - 2.5)
+put('fx', swell(2.2, 0.40), T_PEAK - 2.2)
+put('fx', riser(2.5, 0.22, 300, 8000), T_PEAK - 2.5)
 
 # ------------------------------------------------------------------ CHORUS: back in at the closest pass
 put('drums', boom(1.0), T_PEAK)
-put('fx', cymbal(4.0, 0.26), T_PEAK)
+put('drums', crack(0.65), T_PEAK)
+put('fx', cymbal(4.0, 0.42), T_PEAK)
 for m in (50, 57, 62):
     put('lead', brass(m, 1.9, amp=0.09, swell=0.04, peak=1900), T_PEAK, p=(m - 57) / 15)
 for dt, m, d in chorus_mel[:7]:
-    put('lead', supersaw(m, d, amp=0.052, cutoff=3800, attack=0.06, release=0.6, voices=7, detune=10), T_PEAK + dt)
+    put('lead', supersaw(m, d, amp=0.090, cutoff=6000, attack=0.05, release=0.6, voices=7, detune=10), T_PEAK + dt)
+    put('fx', harp(m + 12, 0.08), T_PEAK + dt)
     put('lead', brass(m - 12, d, amp=0.06, swell=0.1, peak=1700), T_PEAK + dt)
 bar = T_PEAK
 while bar < T_PEAK + 4.0 - 1e-6:
@@ -285,6 +298,19 @@ put('fx', cymbal(3.0, 0.12), T_PEAK + 4.0)
 # final chord
 put('fx', cymbal(3.0, 0.07), T_PEAK + 9.0, p=-0.3)
 
+# ------------------------------------------------------------------ cut accents: make the edit audible
+cut_times = [t for s, t, n in tl][1:]
+for s, t, n in tl[1:]:
+    sid = s['id']
+    if t in (T_OPEN, T_FORM, T_PEAK, D):
+        continue  # these already carry big hits (or, for the drop, silence)
+    if sid in ('S02',):
+        put('fx', whoosh(1.0, 0.30, 0.55), t - 0.55, p=0.2)      # the KC-390 tears past into the crowd
+    elif sid in ('S06', 'S07', 'S08', 'S09', 'S11', 'S12', 'S14', 'S18'):
+        put('fx', whoosh(0.6, 0.20, 0.7), t - 0.42, p=(-0.3 if int(t * 2) % 2 else 0.3))
+        put('drums', taiko(0.40), t)
+    elif sid in ('S15', 'S16', 'S17'):
+        put('fx', harp(76 if sid == 'S15' else (73 if sid == 'S16' else 69), 0.12), t)
 # ------------------------------------------------------------------ sidechain duck (pads/pulse breathe with the kicks)
 hits = []
 for tt in np.arange(T_PAIR, T_VERT, 1.0): hits.append(tt)
@@ -308,7 +334,7 @@ ir_hall = make_ir(2.8, 0.025, 6000)
 ir_room = make_ir(1.4, 0.012, 7000, seed=3)
 wet = dict(pad=0.35, piano=0.30, lead=0.30, bass=0.0, drums=0.16, fx=0.38, pulse=0.22)
 irs = dict(pad=ir_hall, piano=ir_hall, lead=ir_hall, drums=ir_room, fx=ir_hall, pulse=ir_room)
-gain = dict(pad=1.0, piano=0.9, lead=1.0, bass=1.0, drums=0.95, fx=0.9, pulse=0.9)
+gain = dict(pad=1.1, piano=1.15, lead=1.3, bass=1.0, drums=1.25, fx=1.0, pulse=1.35)
 mix = np.zeros((L, 2))
 for b, x in BUS.items():
     y = reverb(x, irs[b], wet[b]) if wet[b] > 0 else x

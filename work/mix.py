@@ -111,29 +111,48 @@ mus, sr = sf.read(f'{S}/music/music.wav', dtype='float64')
 n = min(L, len(mus)); M[:n] = mus[:n]
 ev = json.load(open(f'{S}/music/events.json'))
 TD, TP = ev['T_DROP'], ev['T_PEAK']
-keys = [(0, -1), (4.3, 2), (4.8, -1), (5.3, -4), (ev['T_OPEN'] - 0.4, -4), (ev['T_OPEN'], 3), (ev['T_SOLO'], 1), (ev['T_SOLO'] + 4, 3),
-        (ev['T_VERT'], 4), (ev['T_FORM'], 5), (TD - 3.2, 5), (TD - 2.8, -2), (TD - 0.05, -2), (TD, 3), (TP - 0.05, 3), (TP, 6), (TP + 4.0, 5),
-        (TP + 4.4, 0), (T - 4.0, 1), (T - 3.0, 3), (T, 3)]
-kt = np.array([k[0] for k in keys]); kv = np.array([k[1] for k in keys])
 tt = np.arange(L) / SR
+TO = ev['T_OPEN']
+# 1) the location sound steps back where the score leads, and forward where the real sound is the point
+amb_keys = [(0, 0), (TO + 0.3, 0), (TO + 1.0, -4), (TD - 3.2, -4), (TD - 2.8, -2), (TD - 0.1, -2), (TD, 1.5), (TP - 0.3, 1.5), (TP + 0.2, -5),
+            (TP + 4, -5), (TP + 4.4, 0), (T - 3.5, -1), (T, -3)]
+aa = 10 ** (np.interp(tt, [k[0] for k in amb_keys], [k[1] for k in amb_keys]) / 20)
+AMB *= aa[:, None]
+
+# 2) score level set by *measurement in the band a phone speaker reproduces* (300 Hz - 6 kHz)
+from scipy.signal import butter, sosfilt
+_sos = butter(4, [300, 6000], btype='band', fs=SR, output='sos')
+def band_db(x, a, b):
+    y = sosfilt(_sos, x[ns(a):ns(b)].mean(1))
+    return 20 * np.log10(np.sqrt((y ** 2).mean()) + 1e-9)
+# (t0, t1, reference, target dB of score relative to the reference)
+SECT = [(0.0, 3.85, 'amb', -5), (3.9, 4.6, 'amb', +2), (4.8, TO - 0.3, 'vo', -10), (TO, ev['T_VERT'], 'amb', +4),
+        (ev['T_VERT'], ev['T_FORM'], 'amb', +3), (ev['T_FORM'], TD - 3.2, 'amb', +5), (TD - 2.9, TD - 0.1, 'vo', -10),
+        (TD, TD + 3.0, 'amb', -14), (TD + 3.0, TP - 0.05, 'amb', -5), (TP, TP + 4.0, 'amb', +8),
+        (TP + 4.3, TP + 7.3, 'amb', -3), (TP + 7.3, T - 0.9, 'amb', +3)]
+gains = []
+for a, b, ref, tgt in SECT:
+    R = AMB if ref == 'amb' else VO
+    g = tgt - (band_db(M, a, b) - band_db(R, a, b))
+    gains.append((a, b, float(np.clip(g, -20, 24))))
+    print(f'  score {a:5.1f}-{b:5.1f} vs {ref}: gain {g:+5.1f} dB')
+keys = []
+for a, b, g in gains:
+    keys += [(a + 0.02, g), (b - 0.02, g)]
+keys = sorted(keys)
+kt = np.array([k[0] for k in keys]); kv = np.array([k[1] for k in keys])
 auto = 10 ** (np.interp(tt, kt, kv) / 20)
+auto = np.convolve(auto, np.ones(ns(0.12)) / ns(0.12), mode='same')  # soft corners
 # voice-keyed ducking (only where an announcer line is actually speaking)
 vmask = np.zeros(L)
 for a, b in vo_win:
     vmask[ns(a):ns(b)] = 1
-env = np.sqrt(np.convolve((VO ** 2).mean(1) + (AMB ** 2).mean(1) * 0.0, np.ones(ns(0.05)) / ns(0.05), mode='same'))
+env = np.sqrt(np.convolve((VO ** 2).mean(1), np.ones(ns(0.05)) / ns(0.05), mode='same'))
 act = np.clip((20 * np.log10(env + 1e-9) + 42) / 12, 0, 1) * vmask
 k = ns(0.35)
 act = np.convolve(act, np.ones(k) / k, mode='same')
-duck = 10 ** (-4.0 * act / 20)
+duck = 10 ** (-3.0 * act / 20)
 M *= (auto * duck)[:, None]
-
-# the location sound also breathes: during the chorus hit let the score lead, during the drop the engines lead
-TO = ev['T_OPEN']
-amb_keys = [(0, 0), (TO + 0.5, 0), (TO + 1.5, -3), (TD - 3.2, -3), (TD - 2.8, -1), (TD - 0.1, -1), (TD, 1.5), (TP - 0.3, 1.5), (TP + 0.2, -5),
-            (TP + 4, -5), (TP + 4.5, 0), (T - 3.5, 0), (T, -2)]
-aa = 10 ** (np.interp(tt, [k[0] for k in amb_keys], [k[1] for k in amb_keys]) / 20)
-AMB *= aa[:, None]
 
 mix = AMB + VO + M
 mix = np.stack([hp(mix[:, c], 25) for c in range(2)], 1)
