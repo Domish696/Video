@@ -140,9 +140,13 @@ def make_grader(stats, p):
     gains = (g / np.maximum(wb, 1e-3)) * target
     s = p.get('wb_strength', 0.6)
     gains = 1 + (gains - 1) * s
-    lo = stats['lo'] * p.get('black_keep', 0.85)
-    hi = min(1.0, stats['hi'] * 1.0 + p.get('white_pad', 0.01))
-    expo = p.get('expo', 0.0)
+    # Levels are only allowed to *nudge*: sky-only frames have a tiny luminance range (the aircraft are a
+    # handful of pixels), and a full auto-stretch there explodes contrast and saturation.
+    lo = float(np.clip(stats['lo'] * 0.5, 0.0, 0.06))
+    hi = float(np.clip(stats['hi'] + 0.02, 0.90, 1.0))
+    # gentle exposure normalisation towards a common daylight mid-level
+    auto = float(np.clip(np.log2(0.60 / max(stats['mean'], 1e-3)) * 0.5, -0.10, 0.30))
+    expo = p.get('expo', 0.0) + auto
     sat = p.get('sat', 1.04)
     con = p.get('contrast', 0.15)
     dehaze = p.get('dehaze', 0.0)
@@ -180,7 +184,7 @@ def make_grader(stats, p):
         # split tone: very subtle cool shadows / warm highlights
         L3 = np.clip(x @ np.array([0.114, 0.587, 0.299], np.float32), 0, 1)[..., None]
         sh = (1 - L3) ** 2; hl = L3 ** 2
-        x = x + sh * np.array([0.012, 0.004, -0.006], np.float32) + hl * np.array([-0.012, 0.0, 0.010], np.float32)
+        x = x + sh * np.array([0.010, 0.003, -0.005], np.float32) + hl * np.array([-0.006, 0.0, 0.004], np.float32)
         return np.clip(x, 0, 1)
     return f
 

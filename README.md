@@ -4,7 +4,12 @@ Um único vídeo vertical (9:16, 1080×1920, 24 fps, 60 s) feito a partir de tod
 **Domingo Aéreo do PAMA-SP, no Campo de Marte**, com a Esquadrilha da Fumaça (A-29 Super Tucano) como
 protagonista e Rodolfo e o tio Ferrari como quem estava lá vivendo aquilo.
 
-**Entrega:** [`entrega/CampoDeMarte_Story_9x16.mp4`](entrega/CampoDeMarte_Story_9x16.mp4)
+**Entrega:** [`entrega/CampoDeMarte_Story_9x16.mp4`](entrega/CampoDeMarte_Story_9x16.mp4): H.264 High, 1080×1920,
+24 fps, 9,3 Mbps, AAC 320 kbps, −14 LUFS. Também:
+[`entrega/trilha_original.mp3`](entrega/trilha_original.mp3) (só a trilha) e
+[`entrega/quadros_chave.jpg`](entrega/quadros_chave.jpg).
+
+![quadros-chave](entrega/quadros_chave.jpg)
 
 ---
 
@@ -66,7 +71,7 @@ camisa branca estampada de folhas (foto de 16:34 e câmera dupla).
 | 43,0 | **Voo de dorso em formação** | a música para; só os motores e o público |
 | 48,0 | passagem mais próxima | a música volta inteira |
 | 49,5 | Diamante passa e mergulha | |
-| 52,0 | Criança ergue os braços | *"Uma salva de palmas…"* |
+| 52,25 | Criança ergue os braços | *"Uma salva de palmas…"* |
 | 53,5 | Rodolfo gargalha, A-29 atrás | |
 | 55,5 | Ferrari e Rodolfo, "V" | |
 | 56,75 | Formação se afasta no azul | cartela final |
@@ -105,7 +110,31 @@ que eles viam, embaixo eles), que é como o celular gravou.
   a música abaixa sob a voz.
 - Master: −14 LUFS integrado, pico real ≤ −1 dBTP, AAC 320 kbps.
 
-## 5. Reproduzir
+## 5. Autocrítica: o que a revisão encontrou e foi corrigido
+
+1. **Céu azul "HDR".** A medição quadro a quadro mostrou saturação dobrada nos planos só de céu. Os
+   aviões ocupam tão poucos pixels que o auto-níveis esticava a faixa estreita do céu inteira. Os níveis
+   agora só podem ajustar levemente, e a saturação final fica em ±5% da gravação original.
+2. **Névoa acinzentada.** Nos céus tomados pela fumaça, a normalização de exposição escurecia a imagem.
+   A exposição passou a só clarear, e o dehaze, mais presente apenas nesses planos, recupera o azul e o
+   volume das nuvens.
+3. **Cruzamento (S09).** O rastreamento automático perdia o A-29 que sobe na vertical e o quadro ficava só
+   com a fumaça. Keyframes manuais passaram a acompanhar a subida, que leva direto à formação subindo no
+   plano seguinte.
+4. **Criança (S15).** Começava antes de ela entrar no quadro e cortava as mãos erguidas. Ajustei entrada,
+   duração e altura do enquadramento.
+5. **Multidão com cara de IA.** Em recorte 1:1, o Real-ESRGAN puro deixava cabelos e multidão com textura
+   de pintura. Nos planos com pessoas agora é 55% Lanczos + 45% IA com denoise baixo.
+6. **Mixagem.** Na primeira passada a música ficava ~10 dB abaixo do ruído dos celulares e não aparecia.
+   Rebalanceei: música no nível do ambiente na ação, ambiente dominando no "drop" e música liderando no
+   refrão.
+
+Ficou como está, por fidelidade ao que foi gravado: em S10 e S13 a formação passa por cima e sai pelo
+topo do quadro, porque o cinegrafista não conseguiu acompanhar, e isso reforça a escala. A mudança do
+azul limpo para o céu enfumaçado em S12→S13 é real e coincide com o silêncio da música. As fotos não
+entraram no corte: são de depois do show (16h34) e virariam uma sequência de slides.
+
+## 6. Reproduzir
 
 ```
 work/track_all.py   # detecção de aeronaves quadro a quadro

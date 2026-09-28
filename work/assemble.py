@@ -60,12 +60,18 @@ t_card = T - 2.55
 t_fade = T - 0.85
 vf = (f"[1:v]format=rgba,fade=t=in:st={t_card:.3f}:d=0.7:alpha=1,fade=t=out:st={t_fade + 0.05:.3f}:d=0.7:alpha=1[c];"
       f"[0:v][c]overlay=0:0:enable='gte(t,{t_card:.3f})',fade=t=out:st={t_fade:.3f}:d=0.85,format=yuv420p[v]")
-cmd = ['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', S + '/out/concat.txt',
-       '-loop', '1', '-framerate', '24', '-t', f'{T:.3f}', '-i', S + '/out/card.png',
-       '-i', S + '/mix/final_audio.wav',
-       '-filter_complex', vf, '-map', '[v]', '-map', '2:a',
-       '-c:v', 'libx264', '-preset', 'slow', '-crf', os.environ.get('CRF', '17'), '-profile:v', 'high', '-level', '4.1',
-       '-pix_fmt', 'yuv420p', '-r', '24', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
-       '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-t', f'{T:.3f}', '-movflags', '+faststart', out]
-subprocess.run(cmd, check=True)
+inputs = ['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', S + '/out/concat.txt',
+          '-loop', '1', '-framerate', '24', '-t', f'{T:.3f}', '-i', S + '/out/card.png',
+          '-i', S + '/mix/final_audio.wav', '-filter_complex', vf, '-map', '[v]']
+venc = ['-c:v', 'libx264', '-preset', 'slow', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-r', '24',
+        '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-g', '48']
+aenc = ['-map', '2:a', '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-t', f'{T:.3f}', '-movflags', '+faststart', out]
+bv = os.environ.get('BV')
+if bv:  # two-pass, predictable size for delivery
+    plog = S + '/out/x264pass'
+    subprocess.run(inputs + venc + ['-b:v', bv, '-pass', '1', '-passlogfile', plog, '-an', '-f', 'null', '/dev/null'], check=True)
+    subprocess.run(inputs + venc + ['-b:v', bv, '-maxrate', str(int(float(bv.rstrip('M')) * 1.6)) + 'M', '-bufsize', str(int(float(bv.rstrip('M')) * 3)) + 'M',
+                                    '-pass', '2', '-passlogfile', plog] + aenc, check=True)
+else:
+    subprocess.run(inputs + venc + ['-crf', os.environ.get('CRF', '17')] + aenc, check=True)
 print('wrote', out, T)
