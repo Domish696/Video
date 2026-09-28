@@ -6,7 +6,7 @@ protagonista e Rodolfo e o tio Ferrari como quem estava lá vivendo aquilo.
 
 **Entrega:** [`entrega/CampoDeMarte_Story_9x16.mp4`](entrega/CampoDeMarte_Story_9x16.mp4): H.264 High, 1080×1920,
 24 fps, 9,3 Mbps, AAC 320 kbps, −14 LUFS. Também:
-[`entrega/trilha_original.mp3`](entrega/trilha_original.mp3) (só a trilha) e
+[`entrega/CampoDeMarte_Story_9x16_leve.mp4`](entrega/CampoDeMarte_Story_9x16_leve.mp4) (3,4 Mbps, para enviar por app), [`entrega/trilha_original.mp3`](entrega/trilha_original.mp3) (só a trilha) e
 [`entrega/quadros_chave.jpg`](entrega/quadros_chave.jpg).
 
 ![quadros-chave](entrega/quadros_chave.jpg)
