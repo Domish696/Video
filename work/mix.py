@@ -5,12 +5,12 @@ import numpy as np, soundfile as sf, pyloudnorm as pyln
 from scipy.signal import resample_poly
 sys.path.insert(0, os.path.dirname(__file__))
 from synth import hp, lp, bp, make_ir, reverb, sos_filter, SR, ns
-from edl import timeline
+from edl import timeline, FPS_OUT
 
 S = os.environ['S']
 os.makedirs(S + '/mix', exist_ok=True)
 tl, T = timeline()
-st = {s['id']: (s, t, n / 24) for s, t, n in tl}
+st = {s['id']: (s, t, n / FPS_OUT) for s, t, n in tl}
 L = ns(T + 1.0)
 _cache = {}
 
@@ -31,6 +31,32 @@ def clip(name, a, b):
     if a < 0:
         y = np.concatenate([np.zeros((ns(-a), 2)), y])
     return y.copy()
+
+
+_SEP = None
+
+
+def sep_clip(name, a, b, g_voice, g_rest):
+    """Same range as clip(), rebuilt from the AI-separated stems (voice / everything else) with independent gains."""
+    global _SEP
+    if _SEP is None:
+        p = f'{S}/sep/index.json'
+        _SEP = json.load(open(p)) if os.path.exists(p) else []
+    for e in _SEP:
+        if e['name'] == name and e['a'] <= a + 1e-3 and e['b'] >= b - 1e-3:
+            out = []
+            for f, g in ((e['voice'], g_voice), (e['rest'], g_rest)):
+                x, sr = sf.read(f, dtype='float64')
+                if x.ndim == 1:
+                    x = np.stack([x, x], 1)
+                x = resample_poly(x, 160, 147, axis=0)  # 44.1k -> 48k
+                i = ns(a - e['a']); j = i + ns(b - a)
+                seg = x[i:j]
+                if len(seg) < j - i:
+                    seg = np.pad(seg, ((0, j - i - len(seg)), (0, 0)))
+                out.append(seg * 10 ** (g / 20))
+            return out[0] + out[1]
+    return clip(name, a, b)
 
 
 def fades(y, fin, fout, shape='eqp'):
@@ -66,24 +92,35 @@ def place(buf, y, t, gain_db):
 # ---------------------------------------------------------------- per-shot location sound
 #            gain dB, pre(J), post(L), fade-in, fade-out
 AUD = dict(S01=(0.0, 0.0, 1.3, 0.05, 1.3), S02=None, S03=(-12, 0.1, 0.1, 0.2, 0.2), S04=(-14, 0.1, 0.1, 0.2, 0.3),
-           S05=(-3, 0.6, 0.15, 1.4, 0.3), S06=(0.0, 0.3, 0.15, 0.3, 0.3), S07=(-2, 0.15, 0.15, 0.3, 0.3),
+           S05=(-3, 0.6, 0.15, 1.4, 0.3), D1=(1.0, 0.35, 0.15, 0.3, 0.2), D2=(0.0, 0.1, 0.25, 0.12, 0.45), S06=(0.0, 0.3, 0.15, 0.3, 0.3), S07=(-2, 0.15, 0.15, 0.3, 0.3),
            S08=(-3, 0.15, 0.15, 0.25, 0.3), S09=(-3, 0.15, 0.15, 0.25, 0.3), S10=(-4, 0.15, 0.15, 0.3, 0.3),
            S11=(-7, 0.15, 0.1, 0.3, 0.2), S12=(-7, 0.1, 0.05, 0.2, 0.1), S13=(1.0, 0.03, 0.2, 0.03, 0.3),
            S14=(-1, 0.15, 3.3, 0.25, 0.9), S15=(-10, 0.1, 0.1, 0.2, 0.2), S16=(-2, 0.1, 0.1, 0.2, 0.25),
            S17=(-4, 0.1, 0.1, 0.2, 0.25), S18=(-7, 0.1, 0.0, 0.3, 1.6))
+# AI stem balance per shot: (voice dB, rest dB). Aircraft -> engines forward; drift -> engine/tyres forward;
+# people -> their voices; KC-390 -> the jet over the chatter.
+BAL = dict(S01=(-6, 1), S03=(0, -3), S04=(-2, -2), S05=(-3, 1.5), S06=(0, 1), S07=(-1, 1.5), D1=(-4, 2), D2=(-3, 2), S08=(-3, 1.5), S09=(-3, 1.5),
+           S10=(-4, 1.5), S11=(-4, 1.5), S12=(-4, 1.5), S13=(-7, 2.5), S14=(1, -2), S15=(0, -1), S16=(1, -3), S17=(1, -3), S18=(-6, 1))
 for sid, a in AUD.items():
     if a is None:
         continue
     s, t, d = st[sid]
     g, pre, post, fi, fo = a
-    y = clip(s['src'], s['t_in'] - pre, s['t_in'] + d + post)
+    gv, gr = BAL.get(sid, (0, 0))
+    y = sep_clip(s['src'], s['t_in'] - pre, s['t_in'] + d + post, gv, gr)
+    if sid == 'S13':
+        # keep the spectator's 'olha, olha, olha' (src ~17.9-20.3 s) at full voice while the PA announcer is pulled back
+        yo = sep_clip(s['src'], s['t_in'] - pre, s['t_in'] + d + post, 0, gr)
+        tt_ = s['t_in'] - pre + np.arange(len(y)) / SR
+        w = np.clip(np.minimum((tt_ - 17.8) / 0.25, (20.4 - tt_) / 0.25), 0, 1)[:, None]
+        y = y * (1 - w) + yo * w
     y = clean(y)
     y = fades(y, fi, fo)
     place(AMB, y, t - pre, g)
 
 # ---------------------------------------------------------------- announcer lines (PA of the Esquadrilha da Fumaça)
 def vo(name, a, b, t, g, fi=0.25, fo=0.35):
-    y = clip(name, a, b)
+    y = sep_clip(name, a, b, 2.0, -5.0)
     y = clean(y, 90)
     # presence: gently lift the intelligibility band
     pres = np.stack([bp(y[:, c], 2400, 0.8) for c in range(2)], 1)
@@ -114,7 +151,8 @@ TD, TP = ev['T_DROP'], ev['T_PEAK']
 tt = np.arange(L) / SR
 TO = ev['T_OPEN']
 # 1) the location sound steps back where the score leads, and forward where the real sound is the point
-amb_keys = [(0, 0), (TO + 0.3, 0), (TO + 1.0, -4), (TD - 3.2, -4), (TD - 2.8, -2), (TD - 0.1, -2), (TD, 1.5), (TP - 0.3, 1.5), (TP + 0.2, -5),
+T_DRIFT, T_VERT = st['D1'][1], ev['T_VERT']
+amb_keys = [(0, 0), (TO + 0.3, 0), (TO + 1.0, -4), (T_DRIFT - 0.4, -4), (T_DRIFT, 0), (T_VERT - 0.3, 0), (T_VERT + 0.2, -4), (TD - 3.2, -4), (TD - 2.8, -2), (TD - 0.1, -2), (TD, 1.5), (TP - 0.3, 1.5), (TP + 0.2, -5),
             (TP + 4, -5), (TP + 4.4, 0), (T - 3.5, -1), (T, -3)]
 aa = 10 ** (np.interp(tt, [k[0] for k in amb_keys], [k[1] for k in amb_keys]) / 20)
 AMB *= aa[:, None]
@@ -126,7 +164,7 @@ def band_db(x, a, b):
     y = sosfilt(_sos, x[ns(a):ns(b)].mean(1))
     return 20 * np.log10(np.sqrt((y ** 2).mean()) + 1e-9)
 # (t0, t1, reference, target dB of score relative to the reference)
-SECT = [(0.0, 3.85, 'amb', -5), (3.9, 4.6, 'amb', +2), (4.8, TO - 0.3, 'vo', -10), (TO, ev['T_VERT'], 'amb', +4),
+SECT = [(0.0, 3.85, 'amb', -5), (3.9, 4.6, 'amb', +2), (4.8, TO - 0.3, 'vo', -10), (TO, T_DRIFT - 0.1, 'amb', +4), (T_DRIFT, T_VERT - 0.1, 'amb', +1),
         (ev['T_VERT'], ev['T_FORM'], 'amb', +3), (ev['T_FORM'], TD - 3.2, 'amb', +5), (TD - 2.9, TD - 0.1, 'vo', -10),
         (TD, TD + 3.0, 'amb', -14), (TD + 3.0, TP - 0.05, 'amb', -5), (TP, TP + 4.0, 'amb', +8),
         (TP + 4.3, TP + 7.3, 'amb', -3), (TP + 7.3, T - 0.9, 'amb', +3)]

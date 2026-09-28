@@ -197,9 +197,9 @@ def vignette(h, w, strength=0.10):
 
 
 class FFWriter:
-    def __init__(self, path, w=OUT_W, h=OUT_H, fps=FPS, crf=14):
+    def __init__(self, path, w=OUT_W, h=OUT_H, fps=FPS, crf=14, preset='slow'):
         self.p = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{w}x{h}', '-r', str(fps), '-i', '-',
-                                   '-c:v', 'libx264', '-preset', 'slow', '-crf', str(crf), '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709',
+                                   '-c:v', 'libx264', '-preset', preset, '-crf', str(crf), '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709',
                                    '-color_trc', 'bt709', '-colorspace', 'bt709', path], stdin=subprocess.PIPE)
 
     def write(self, img):

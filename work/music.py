@@ -15,7 +15,8 @@ os.makedirs(OUT, exist_ok=True)
 
 tl, TOTAL = timeline()
 start = {s['id']: t for s, t, n in tl}
-T_OPEN, T_SOLO, T_PAIR, T_VERT, T_CROSS, T_FORM, T_DROP = (start[k] for k in ('S05', 'S06', 'S07', 'S08', 'S09', 'S10', 'S13'))
+T_OPEN, T_SOLO, T_PAIR, T_DRIFT, T_VERT, T_CROSS, T_FORM, T_DROP = (start[k] for k in ('S05', 'S06', 'S07', 'D1', 'S08', 'S09', 'S10', 'S13'))
+T_PULL = T_DROP - 2.8   # the announcer: 'vamos ouvir os motores...'
 T_PEAK = T_DROP + 5.0
 T_AFTER = start['S15']
 T_END = TOTAL
@@ -51,9 +52,10 @@ V = {
 }
 D = T_DROP
 CH = [(4.0, 6.0, 'Aadd9'), (6.0, 8.0, 'E/G#'), (8.0, 10.0, 'F#m7'), (10.0, 12.0, 'Dadd9'), (12.0, 13.0, 'A/C#'), (13.0, 14.0, 'Esus4'),
-      (14.0, 16.0, 'D'), (16.0, 18.0, 'A'), (18.0, 20.0, 'E'), (20.0, 22.0, 'F#m'), (22.0, 24.0, 'D'), (24.0, 26.0, 'A/C#'),
-      (26.0, 28.0, 'Esus4'), (28.0, 29.5, 'E'), (29.5, 31.0, 'F#m'), (31.0, 33.0, 'D'),
-      (33.0, 35.0, 'A'), (35.0, 37.0, 'E/G#'), (37.0, 39.0, 'F#m'), (39.0, 41.0, 'D'), (41.0, D, 'Esus4'),
+      (14.0, 16.0, 'D'), (16.0, 18.0, 'A'), (18.0, 20.0, 'E'), (20.0, 22.0, 'F#m'), (22.0, 24.0, 'D'), (24.0, T_DRIFT, 'A/C#'),
+      (T_DRIFT, T_DRIFT + 2, 'F#m'), (T_DRIFT + 2, T_DRIFT + 3, 'D'), (T_DRIFT + 3, T_VERT, 'E'),
+      (T_VERT, T_VERT + 2, 'Esus4'), (T_VERT + 2, T_CROSS, 'E'), (T_CROSS, T_CROSS + 1, 'F#m'), (T_CROSS + 1, T_FORM, 'D'),
+      (T_FORM, T_FORM + 2, 'A'), (T_FORM + 2, T_FORM + 4, 'E/G#'), (T_FORM + 4, T_FORM + 6, 'F#m'), (T_FORM + 6, D, 'Esus4'),
       (T_PEAK, T_PEAK + 2, 'D'), (T_PEAK + 2, T_PEAK + 4, 'A'), (T_PEAK + 4, T_PEAK + 6, 'E'), (T_PEAK + 6, T_PEAK + 8, 'F#m'),
       (T_PEAK + 8, T_PEAK + 9, 'D'), (T_PEAK + 9, T_END + 1.5, 'Aadd9')]
 
@@ -61,7 +63,8 @@ CH = [(4.0, 6.0, 'Aadd9'), (6.0, 8.0, 'E/G#'), (8.0, 10.0, 'F#m7'), (10.0, 12.0,
 def section(t):
     if t < 4.0: return 'intro'
     if t < T_OPEN: return 'theme'
-    if t < T_VERT: return 'open'
+    if t < T_DRIFT: return 'open'
+    if t < T_VERT: return 'drift'
     if t < T_FORM: return 'build'
     if t < D: return 'climax'
     if t < T_PEAK: return 'drop'
@@ -100,6 +103,8 @@ for t0, t1, name in CH:
         amp, cut, att = 0.110, 5000, 0.25
     elif sec == 'chorus':
         amp, cut, att = 0.125, 5800, 0.06
+    elif sec == 'drift':
+        amp, cut, att = 0.045, 1600, 0.05
     else:
         amp, cut, att = 0.080, 3000, 0.6
     dur = t1 - t0
@@ -118,6 +123,13 @@ for t0, t1, name in CH:
                 put('bass', sub(b + 12, 0.6, amp=0.18, attack=0.02, release=0.2), bar + 1.25)
                 put('bass', bass_harm(b, 0.6, amp=0.09, release=0.15), bar + 1.25)
             bar += 2.0
+    elif sec == 'drift':
+        k = t0
+        while k < t1 - 1e-6:
+            m = b + 12 if int(round((k - t0) / 0.25)) % 4 in (0, 3) else b + 24
+            put('bass', sub(b + 12, 0.2, amp=0.20, attack=0.003, release=0.05), k)
+            put('bass', bass_harm(m - 12, 0.2, amp=0.16, attack=0.002, release=0.05, cutoff=2600), k)
+            k += 0.25
     elif sec in ('climax', 'chorus'):
         k = t0
         while k < t1 - 1e-6:  # driving eighths, octave jumps
@@ -189,17 +201,40 @@ for t, m in zip(COUNTS, (69, 73, 76)):
     put('fx', harp(m + 12, 0.08), t + 0.004, p=-0.3)
 # percussion for the opening
 bar = T_OPEN
-while bar < T_VERT - 1e-6:
+while bar < T_DRIFT - 1e-6:
     put('drums', taiko(0.45), bar)
     bar += 2.0
 t = 18.0
-while t < T_VERT - 1e-6:
+while t < T_DRIFT - 1e-6:
     put('drums', shaker(0.05 + 0.02 * (int(t * 2) % 2)), t)
     t += 0.25
 t = T_PAIR
-while t < T_VERT - 1e-6:
+while t < T_DRIFT - 1e-6:
     put('drums', kick(0.45), t)
     t += 1.0
+
+# ------------------------------------------------------------------ DRIFT: change of energy on the ground
+put('drums', crack(0.55), T_DRIFT); put('drums', boom(0.45), T_DRIFT)
+put('fx', cymbal(2.0, 0.22), T_DRIFT, p=0.2)
+put('fx', swell(1.0, 0.30), T_DRIFT - 1.0)
+t = T_DRIFT
+while t < T_VERT - 1e-6:
+    k = int(round((t - T_DRIFT) / 0.5))
+    put('drums', kick(0.62), t)
+    if k % 2 == 1:
+        put('drums', snare(0.42), t); put('drums', clap(0.34), t)
+    t += 0.5
+t = T_DRIFT
+while t < T_VERT - 1e-6:
+    put('drums', hat(0.07 + 0.03 * (int(round((t - T_DRIFT) / 0.125)) % 2 == 0)), t, p=0.3)
+    t += 0.125
+for t0, t1, name in CH:
+    if T_DRIFT <= t0 < T_VERT:
+        b, notes = V[name]
+        for off in np.arange(0, t1 - t0 - 1e-6, 0.5):   # short chord stabs on the off-beats
+            for m in notes[1:]:
+                put('lead', pluck(m + 12, 0.12, amp=0.05, bright=3600), t0 + off + 0.25, p=0.2)
+put('drums', tom(0.35, 1.1), T_VERT - 0.5); put('drums', tom(0.4, 0.95), T_VERT - 0.25)
 
 # ------------------------------------------------------------------ BUILD: vertical climb + crossing
 climb = [52, 57, 59, 64, 69, 71, 76, 81, 83, 88]
@@ -232,10 +267,10 @@ put('drums', boom(0.55), T_FORM)
 put('drums', crack(0.45), T_FORM)
 put('fx', cymbal(3.0, 0.34), T_FORM)
 bar = T_FORM
-while bar < 41.0 - 1e-6:
+while bar < T_PULL - 1e-6:
     for off, what in ((0.0, 'k'), (0.75, 'k'), (1.0, 's'), (1.5, 'k')):
         tt = bar + off
-        if tt >= 41.0:
+        if tt >= T_PULL:
             break
         if what == 'k':
             put('drums', kick(0.6), tt)
@@ -244,7 +279,7 @@ while bar < 41.0 - 1e-6:
     put('drums', taiko(0.55), bar)
     bar += 2.0
 t = T_FORM
-while t < 41.0 - 1e-6:
+while t < T_PULL - 1e-6:
     put('drums', hat(0.05 + 0.02 * (int(round(t * 4)) % 2)), t, p=0.25)
     t += 0.125
 chorus_mel = [(0.0, 81, 1.0), (1.0, 78, 0.5), (1.5, 76, 0.5), (2.0, 76, 1.5), (3.5, 73, 0.5), (4.0, 71, 1.0), (5.0, 76, 1.0),
@@ -254,13 +289,13 @@ for dt, m, d in chorus_mel:
     put('lead', supersaw(m, d, amp=0.035, cutoff=6000, attack=0.08, release=0.5, voices=5, detune=9), T_FORM + dt)
     put('lead', brass(m - 24, d, amp=0.055, swell=0.15, peak=1500), T_FORM + dt)
 for t0, t1, name in CH:
-    if T_FORM <= t0 < 41.0:
+    if T_FORM <= t0 < T_PULL:
         b, notes = V[name]
         put('lead', brass(b + 24, t1 - t0 - 0.1, amp=0.06, swell=0.5, peak=1600), t0)
 # the announcer asks to listen to the engines: pull the music back, inhale, silence
-put('pad', supersaw(64, D - 41.0, amp=0.05, cutoff=900, attack=0.3, release=0.25), 41.0)
+put('pad', supersaw(64, D - T_PULL, amp=0.05, cutoff=900, attack=0.3, release=0.25), T_PULL)
 put('fx', swell(1.4, 0.18), D - 1.4)
-put('drums', taiko(0.4), 41.0)
+put('drums', taiko(0.4), T_PULL)
 
 # ------------------------------------------------------------------ DROP: only a whisper of score under the real engines
 put('bass', sub(33, T_PEAK - D, amp=0.07, attack=1.0, release=0.2), D)
@@ -309,14 +344,19 @@ for s, t, n in tl[1:]:
     elif sid in ('S06', 'S07', 'S08', 'S09', 'S11', 'S12', 'S14', 'S18'):
         put('fx', whoosh(0.6, 0.20, 0.7), t - 0.42, p=(-0.3 if int(t * 2) % 2 else 0.3))
         put('drums', taiko(0.40), t)
+    elif sid == 'D2':
+        put('drums', taiko(0.5), t); put('fx', whoosh(0.6, 0.18, 0.7), t - 0.42)
+    elif sid == 'D1':
+        pass
     elif sid in ('S15', 'S16', 'S17'):
         put('fx', harp(76 if sid == 'S15' else (73 if sid == 'S16' else 69), 0.12), t)
 # ------------------------------------------------------------------ sidechain duck (pads/pulse breathe with the kicks)
 hits = []
-for tt in np.arange(T_PAIR, T_VERT, 1.0): hits.append(tt)
+for tt in np.arange(T_PAIR, T_DRIFT, 1.0): hits.append(tt)
+for tt in np.arange(T_DRIFT, T_VERT, 0.5): hits.append(tt)
 for tt in np.arange(T_VERT, T_FORM, 1.0): hits.append(tt)
 bar = T_FORM
-while bar < 41.0:
+while bar < T_PULL:
     hits += [bar, bar + 0.75, bar + 1.5]; bar += 2.0
 bar = T_PEAK
 while bar < T_PEAK + 4.0:

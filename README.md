@@ -4,10 +4,31 @@ Um único vídeo vertical (9:16, 1080×1920, 24 fps, 60 s) feito a partir de tod
 **Domingo Aéreo do PAMA-SP, no Campo de Marte**, com a Esquadrilha da Fumaça (A-29 Super Tucano) como
 protagonista e Rodolfo e o tio Ferrari como quem estava lá vivendo aquilo.
 
-**Entrega:** [`entrega/CampoDeMarte_Story_9x16.mp4`](entrega/CampoDeMarte_Story_9x16.mp4): H.264 High, 1080×1920,
-24 fps, 9,3 Mbps, AAC 320 kbps, −14 LUFS. Também:
-[`entrega/CampoDeMarte_Story_9x16_leve.mp4`](entrega/CampoDeMarte_Story_9x16_leve.mp4) (3,4 Mbps, para enviar por app), [`entrega/trilha_original.mp3`](entrega/trilha_original.mp3) (só a trilha) e
-[`entrega/quadros_chave.jpg`](entrega/quadros_chave.jpg).
+**Entrega:** [`entrega/CampoDeMarte_Instagram.mp4`](entrega/CampoDeMarte_Instagram.mp4): pronto para Stories/Reels,
+1080×1920, **60 fps reconstruídos por IA**, H.264 High, 59,9 s, −14 LUFS, cartela dentro da área segura. Também:
+[`entrega/trilha_original.mp3`](entrega/trilha_original.mp3) e [`entrega/quadros_chave.jpg`](entrega/quadros_chave.jpg).
+
+## Etapa 2 · fluidez, drifts e Instagram
+
+- **Tempo real de cada quadro.** 16 dos 33 vídeos do WhatsApp têm cadência irregular. Cada instante de
+  saída é posicionado entre os dois quadros reais pelo timestamp verdadeiro de cada um, não pela ordem.
+  Assim somem os "soquinhos" de velocidade, e quadros duplicados (4 nos trechos usados) são descartados.
+- **Interpolação por IA (RIFE 4.26)** até 120 fps no master. O fluxo óptico da IA é calculado na imagem
+  original e usado para transportar as versões ampliadas por IA (Real-ESRGAN) dos quadros reais. Assim o
+  detalhe fica estável no tempo em vez de "ferver" quadro a quadro.
+- **Antifantasma.** Onde as duas imagens transportadas discordam (oclusão, fumaça), usa-se o quadro real
+  mais próximo em vez de sobrepor os dois. Isso evita avião ou carro duplicado.
+- **Obturador curto físico** (~1/240 s) aplicado ao longo do movimento de cada pixel, para os quadros
+  novos terem o mesmo borrão natural de uma câmera.
+- **Estabilização** que separa o tremor involuntário (>~2 Hz, removido em 60–85%) do movimento intencional
+  (panorâmica e acompanhamento, preservados). A câmera continua com cara de celular, só que firme.
+- **Drifts** entram entre a abertura aérea e a virada vertical (25,5–30 s) como mudança de energia: o
+  carro de lado na fumaça com os celulares erguidos, depois a criança nos ombros vendo o carro vermelho
+  deslizar. A trilha vira um groove mais urbano nesse trecho e volta para o céu na subida vertical.
+- **Áudio com IA (Demucs).** Separação voz/resto em todos os trechos. Motores e pneus ganham presença nas
+  ações, as falas do locutor ficam mais limpas, e o "olha, olha, olha" do público no ápice fica inteiro.
+- **Medição antes × depois** (salto por quadro, P95): KC-390 32→13 px; tonneau 52→24 px; formação no ápice
+  78→23 px; diamante 80→16 px. Nenhum quadro repetido.
 
 ![quadros-chave](entrega/quadros_chave.jpg)
 
